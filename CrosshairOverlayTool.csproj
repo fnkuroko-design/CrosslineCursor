@@ -21,5 +21,6 @@
 
   <ItemGroup>
     <Compile Remove="snapshots\**\*.cs" />
+    <Compile Remove="temp\**\*.cs" />
   </ItemGroup>
 </Project>
