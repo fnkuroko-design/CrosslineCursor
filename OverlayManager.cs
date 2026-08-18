@@ -76,6 +76,7 @@ internal sealed class OverlayManager : IDisposable
     private void TrackingTimerOnTick(object? sender, EventArgs e)
     {
         UpdateCursorPosition(force: false);
+        EnsureOverlayFormsTopmost();
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
@@ -133,6 +134,26 @@ internal sealed class OverlayManager : IDisposable
         }
 
         NativeMethods.ShowWindow(overlayForm.Handle, NativeMethods.SW_SHOWNOACTIVATE);
+        MoveLineFormToTopmost(overlayForm);
+    }
+
+    private void EnsureOverlayFormsTopmost()
+    {
+        // 他プロセスが後から最前面ウィンドウを表示しても、表示中のオーバーレイを
+        // 最前面グループの先頭へ戻す。カーソルが止まっていても追跡タイマーで実行する。
+        if (_verticalOverlayForm?.Visible == true)
+        {
+            MoveLineFormToTopmost(_verticalOverlayForm);
+        }
+
+        if (_horizontalOverlayForm?.Visible == true)
+        {
+            MoveLineFormToTopmost(_horizontalOverlayForm);
+        }
+    }
+
+    private static void MoveLineFormToTopmost(OverlayForm overlayForm)
+    {
         NativeMethods.SetWindowPos(
             overlayForm.Handle,
             NativeMethods.HWND_TOPMOST,
@@ -140,7 +161,7 @@ internal sealed class OverlayManager : IDisposable
             0,
             0,
             0,
-            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
     }
 
     private static Rectangle GetVirtualDesktopBounds()
