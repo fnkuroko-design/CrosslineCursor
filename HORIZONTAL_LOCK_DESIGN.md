@@ -8,7 +8,7 @@
 - `AppController`: 表示、拘束、設定再適用、トレイ操作を一元管理する。
 - `InputManager`: 低レベルキーボードフック、`RegisterHotKey`、Raw Input によるグローバル入力を処理する。
 - `HoldKeyTracker`: 通常キーの押下状態と、英数キーの lease 方式疑似ホールドを追跡する。
-- `OverlayManager`: 約 60 FPS の `GetCursorPos` ポーリング、仮想デスクトップ領域、オーバーレイ表示を担当する。表示中の各オーバーレイフォームは、同じタイマーで `HWND_TOPMOST` と `HWND_TOP` へ非アクティブのまま再配置し、後から表示された通常の最前面ウィンドウより前面に戻す。
+- `OverlayManager`: 約 60 FPS の `GetCursorPos` ポーリング、仮想デスクトップ領域、オーバーレイ表示を担当する。表示中の各オーバーレイフォームは、同じタイマーで `HWND_TOPMOST` へ非アクティブのまま再配置し、後から表示された通常の最前面ウィンドウより前面に戻す。
 - `OverlayForm`: 縦線・横線それぞれの透明、クリック透過、最前面フォームを提供する。
 - `CursorConstraintManager`: 軸の自動判定と `ClipCursor`／`SetCursorPos` による拘束を担当する。
 - `SettingsManager` と `AppSettings`: JSON 設定の保存と正規化を担当する。
