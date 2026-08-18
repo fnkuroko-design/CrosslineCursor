@@ -1,0 +1,19 @@
+# Build outputs and locally generated distribution packages
+[Bb]in/
+[Oo]bj/
+dist/
+temp/
+
+# Historical local snapshots (the canonical source is tracked at the repository root)
+snapshots/
+
+# IDE and user-specific files
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test results
+TestResults/
