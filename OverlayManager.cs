@@ -162,6 +162,17 @@ internal sealed class OverlayManager : IDisposable
             0,
             0,
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
+
+        // HWND_TOPMOST で最前面グループへ戻した後、同グループ内でも先頭へ上げる。
+        // 一般の最前面ウィンドウが後から表示された場合に、相対的な Z オーダーを回復する。
+        NativeMethods.SetWindowPos(
+            overlayForm.Handle,
+            NativeMethods.HWND_TOP,
+            0,
+            0,
+            0,
+            0,
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
     }
 
     private static Rectangle GetVirtualDesktopBounds()

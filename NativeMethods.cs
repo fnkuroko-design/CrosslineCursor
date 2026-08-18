@@ -66,6 +66,7 @@ internal static class NativeMethods
     public const uint RIM_TYPEKEYBOARD = 1;
 
     public static readonly IntPtr HWND_TOPMOST = new(-1);
+    public static readonly IntPtr HWND_TOP = IntPtr.Zero;
 
     public delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
