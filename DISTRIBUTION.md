@@ -50,15 +50,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Distributions.ps1 -Pr
 ## バージョン管理
 
 - 正式なバージョン番号の唯一の管理元は `CrosshairOverlayTool.csproj` の `<Version>` である。この値からアセンブリ、ファイル、表示用のバージョン情報を生成する。
-- 現在のリリースは `v1.0.0`。アプリのトレイメニューと設定画面に表示する。
+- 現在のリリースは `v1.0.1`。アプリのトレイメニューと設定画面に表示する。
 - リリース前に `<Version>` を `MAJOR.MINOR.PATCH` 形式で更新する。破壊的変更は `MAJOR`、機能追加は `MINOR`、互換性を保つ修正は `PATCH` を上げる。
 - リリース内容をコミットした後、同じ番号の注釈付き Git タグ（例: `v1.0.0`）を付与する。
 - 配布スクリプトはこの値を読み取り、`v<Version>` を含む出力フォルダと ZIP を作成する。
 
 ## 出力先
 
-- `dist\CrosshairOverlayTool-v1.0.0-win-x64-fdd`
-- `dist\CrosshairOverlayTool-v1.0.0-win-x64-fdd.zip`
+- `dist\CrosshairOverlayTool-v1.0.1-win-x64-fdd`
+- `dist\CrosshairOverlayTool-v1.0.1-win-x64-fdd.zip`
 - 明示指定した場合は `scd` または `singlefile` の同名バリエーション
 
 ## 追加で効く対策
