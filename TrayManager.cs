@@ -10,6 +10,7 @@ internal sealed class TrayManager : IDisposable
     private readonly ToolStripMenuItem _togglePinnedMenuItem;
     private readonly ToolStripMenuItem _toggleHorizontalLockMenuItem;
     private readonly ToolStripMenuItem _settingsMenuItem;
+    private readonly ToolStripMenuItem _versionMenuItem;
     private readonly ToolStripMenuItem _exitMenuItem;
     private readonly Icon _trayIcon;
 
@@ -31,6 +32,11 @@ internal sealed class TrayManager : IDisposable
         _settingsMenuItem = new ToolStripMenuItem("設定...");
         _settingsMenuItem.Click += OnSettingsMenuItemClick;
 
+        _versionMenuItem = new ToolStripMenuItem($"バージョン: {AppVersion.DisplayText}")
+        {
+            Enabled = false
+        };
+
         _exitMenuItem = new ToolStripMenuItem("終了");
         _exitMenuItem.Click += OnExitMenuItemClick;
 
@@ -42,6 +48,8 @@ internal sealed class TrayManager : IDisposable
                 _toggleHorizontalLockMenuItem,
                 new ToolStripSeparator(),
                 _settingsMenuItem,
+                new ToolStripSeparator(),
+                _versionMenuItem,
                 new ToolStripSeparator(),
                 _exitMenuItem
             ]);

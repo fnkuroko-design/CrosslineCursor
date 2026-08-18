@@ -3,6 +3,7 @@
 [Oo]bj/
 dist/
 temp/
+.tools/
 
 # Historical local snapshots (the canonical source is tracked at the repository root)
 snapshots/

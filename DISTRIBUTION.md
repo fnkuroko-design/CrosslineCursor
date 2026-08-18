@@ -11,7 +11,13 @@ Norton などの AV 製品は、未署名の新規アプリに対してレピュ
 さらに、`.NET` の単一ファイル配布は、設定によってはネイティブ部品を実行時に展開します。  
 そのため、検知を減らしたい場合は単一ファイルを既定にしない方が安全です。
 
-## 推奨順
+## 標準の配布形式
+
+`fdd`（Framework-Dependent Deployment）を標準の配布形式とする。配布先には `.NET Desktop Runtime 8` が必要だが、ライブラリを同梱せず配布サイズを小さくでき、未署名アプリでの AV 誤検知を抑えやすい。
+
+`scd` と `single-file` は必要になった場合にだけ明示指定して生成する。
+
+## 形式の比較
 
 1. `fdd`
    - `Framework-Dependent Deployment`
@@ -34,20 +40,26 @@ Norton などの AV 製品は、未署名の新規アプリに対してレピュ
 powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Distributions.ps1
 ```
 
-既定では `fdd` と `scd` を生成します。  
-単一ファイルも作る場合は次です。
+既定では `fdd` だけを生成します。
+別形式も作る場合は、プロファイルを明示します。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Distributions.ps1 -Profiles fdd,scd,single-file
 ```
 
+## バージョン管理
+
+- 正式なバージョン番号の唯一の管理元は `CrosshairOverlayTool.csproj` の `<Version>` である。この値からアセンブリ、ファイル、表示用のバージョン情報を生成する。
+- 現在のリリースは `v1.0.0`。アプリのトレイメニューと設定画面に表示する。
+- リリース前に `<Version>` を `MAJOR.MINOR.PATCH` 形式で更新する。破壊的変更は `MAJOR`、機能追加は `MINOR`、互換性を保つ修正は `PATCH` を上げる。
+- リリース内容をコミットした後、同じ番号の注釈付き Git タグ（例: `v1.0.0`）を付与する。
+- 配布スクリプトはこの値を読み取り、`v<Version>` を含む出力フォルダと ZIP を作成する。
+
 ## 出力先
 
-- `dist\CrosshairOverlayTool-win-x64-fdd`
-- `dist\CrosshairOverlayTool-win-x64-fdd.zip`
-- `dist\CrosshairOverlayTool-win-x64-scd`
-- `dist\CrosshairOverlayTool-win-x64-scd.zip`
-- 任意で `dist\CrosshairOverlayTool-win-x64-singlefile`
+- `dist\CrosshairOverlayTool-v1.0.0-win-x64-fdd`
+- `dist\CrosshairOverlayTool-v1.0.0-win-x64-fdd.zip`
+- 明示指定した場合は `scd` または `singlefile` の同名バリエーション
 
 ## 追加で効く対策
 

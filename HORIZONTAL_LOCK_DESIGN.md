@@ -12,6 +12,7 @@
 - `OverlayForm`: 縦線・横線それぞれの透明、クリック透過、最前面フォームを提供する。
 - `CursorConstraintManager`: 軸の自動判定と `ClipCursor`／`SetCursorPos` による拘束を担当する。
 - `SettingsManager` と `AppSettings`: JSON 設定の保存と正規化を担当する。
+- `AppVersion`: プロジェクトのアセンブリ情報から表示用バージョンを取得する。
 - `TrayManager`: 状態表示、固定表示、軸拘束、設定、終了を提供する。
 
 描画、入力、カーソル拘束の責務は分離し、`InputManager` にカーソル操作を持ち込まない。

@@ -21,7 +21,7 @@ internal sealed class SettingsForm : Form
 
     public SettingsForm(AppSettings settings)
     {
-        Text = "Crosshair Overlay Tool 設定";
+        Text = $"Crosshair Overlay Tool {AppVersion.DisplayText} 設定";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterScreen;
         MaximizeBox = false;

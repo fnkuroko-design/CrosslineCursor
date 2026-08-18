@@ -1,6 +1,6 @@
 param(
     [ValidateSet("fdd", "scd", "single-file")]
-    [string[]]$Profiles = @("fdd", "scd"),
+    [string[]]$Profiles = @("fdd"),
 
     [string]$RuntimeIdentifier = "win-x64",
 
@@ -16,9 +16,21 @@ $distRoot = Join-Path $repoRoot "dist"
 $localDotnet = Join-Path $repoRoot ".tools\\dotnet\\dotnet.exe"
 $dotnet = if (Test-Path $localDotnet) { $localDotnet } else { "dotnet" }
 
+[xml]$projectFile = Get-Content -LiteralPath $projectPath -Raw
+$releaseVersion = [string]($projectFile.Project.PropertyGroup |
+    ForEach-Object { $_.Version } |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+    Select-Object -First 1)
+
+if ([string]::IsNullOrWhiteSpace($releaseVersion)) {
+    throw "Release version was not found in CrosshairOverlayTool.csproj."
+}
+
+$artifactPrefix = "CrosshairOverlayTool-v$releaseVersion-$RuntimeIdentifier"
+
 $profileMap = @{
     "fdd" = @{
-        FolderName = "CrosshairOverlayTool-$RuntimeIdentifier-fdd"
+        FolderName = "$artifactPrefix-fdd"
         Arguments = @(
             "publish", $projectPath,
             "-c", "Release",
@@ -32,7 +44,7 @@ $profileMap = @{
         )
     }
     "scd" = @{
-        FolderName = "CrosshairOverlayTool-$RuntimeIdentifier-scd"
+        FolderName = "$artifactPrefix-scd"
         Arguments = @(
             "publish", $projectPath,
             "-c", "Release",
@@ -45,7 +57,7 @@ $profileMap = @{
         )
     }
     "single-file" = @{
-        FolderName = "CrosshairOverlayTool-$RuntimeIdentifier-singlefile"
+        FolderName = "$artifactPrefix-singlefile"
         Arguments = @(
             "publish", $projectPath,
             "-c", "Release",
@@ -62,6 +74,7 @@ $profileMap = @{
 }
 
 New-Item -ItemType Directory -Force -Path $distRoot | Out-Null
+Write-Output "Release version: v$releaseVersion"
 
 foreach ($profile in $Profiles) {
     $config = $profileMap[$profile]
