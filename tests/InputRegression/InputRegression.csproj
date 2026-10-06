@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <HoldTrackerSource Condition="'$(HoldTrackerSource)' == ''">../../HoldKeyTracker.cs</HoldTrackerSource>
+    <DefineConstants Condition="'$(Baseline)' == 'true'">$(DefineConstants);BASELINE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(HoldTrackerSource)" Link="HoldKeyTracker.cs" />
+    <Compile Include="../../EisuHotkeyTracker.cs" Link="EisuHotkeyTracker.cs" Condition="'$(Baseline)' != 'true'" />
+    <Compile Include="../../KeyBindingParser.cs" Link="KeyBindingParser.cs" />
+    <Compile Include="../../NativeMethods.cs" Link="NativeMethods.cs" />
+  </ItemGroup>
+</Project>

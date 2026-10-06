@@ -250,7 +250,7 @@ internal sealed class SettingsForm : Form
             ForeColor = SystemColors.GrayText,
             Margin = new Padding(0, 6, 0, 0),
             MaximumSize = new Size(470, 0),
-            Text = "英数キーをホールドキーにした場合のみ使用します。小さくすると短押し後に早く消えますが、瞬断しやすくなります。"
+            Text = "英数キーの初回リピート待ちに加える余白です。解放はリピート停止で判定するため、離した後も短時間表示が残ります。"
         };
 
         var horizontalLockHintLabel = new Label

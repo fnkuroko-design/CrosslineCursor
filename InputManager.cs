@@ -13,7 +13,6 @@ internal sealed class InputManager : IDisposable
     private const int LockHoldKeyStateMessage = NativeMethods.WM_APP + 3;
     private const int EmergencyUnlockMessage = NativeMethods.WM_APP + 4;
     private const int HorizontalLockToggleHotkeyMessage = NativeMethods.WM_APP + 5;
-    private const uint ToggleHotkeyDebounceMs = 150;
 
     private readonly bool _toggleModeEnabled;
     private readonly HotkeyBinding _toggleHotkey;
@@ -27,13 +26,11 @@ internal sealed class InputManager : IDisposable
     private readonly HotkeyWindow _hotkeyWindow;
     private readonly HoldKeyTracker? _primaryHoldTracker;
     private readonly HoldKeyTracker? _lockHoldTracker;
+    private readonly EisuHotkeyTracker? _toggleEisuTracker;
+    private readonly EisuHotkeyTracker? _horizontalLockToggleEisuTracker;
     private readonly bool _rawKeyboardRequired;
 
     private IntPtr _keyboardHook = IntPtr.Zero;
-    private uint _lastToggleHotkeyScanCode;
-    private long _lastToggleHotkeyTick;
-    private uint _lastHorizontalLockToggleHotkeyScanCode;
-    private long _lastHorizontalLockToggleHotkeyTick;
     private bool _disposed;
 
     public InputManager(
@@ -54,6 +51,15 @@ internal sealed class InputManager : IDisposable
         _toggleHotkeyHandledByHook = _toggleModeEnabled && _toggleHotkey.VirtualKey == NativeMethods.VK_DBE_ALPHANUMERIC;
         _horizontalLockToggleHotkeyHandledByHook =
             _horizontalLockEnabled && _horizontalLockToggleHotkey.VirtualKey == NativeMethods.VK_DBE_ALPHANUMERIC;
+        if (_toggleHotkeyHandledByHook)
+        {
+            _toggleEisuTracker = new EisuHotkeyTracker(eisuPseudoHoldInitialMarginMs);
+        }
+
+        if (_horizontalLockToggleHotkeyHandledByHook)
+        {
+            _horizontalLockToggleEisuTracker = new EisuHotkeyTracker(eisuPseudoHoldInitialMarginMs);
+        }
 
         _holdStateTimer = new System.Windows.Forms.Timer { Interval = 20 };
         _holdStateTimer.Tick += OnHoldStateTimerTick;
@@ -274,6 +280,8 @@ internal sealed class InputManager : IDisposable
 
         _primaryHoldTracker?.ProcessTimerTick();
         _lockHoldTracker?.ProcessTimerTick();
+        _toggleEisuTracker?.ProcessTimerTick();
+        _horizontalLockToggleEisuTracker?.ProcessTimerTick();
 
         if (!IsAnyHoldTrackerPressed())
         {
@@ -358,36 +366,20 @@ internal sealed class InputManager : IDisposable
 
     private void ProcessToggleHotkeyMessage(uint message, NativeMethods.KBDLLHOOKSTRUCT keyboardData)
     {
-        if (!_toggleHotkeyHandledByHook)
+        if (_toggleEisuTracker?.ProcessKeyMessage(message, keyboardData,
+                AreRequiredModifiersPressed(_toggleHotkey.Modifiers)) == true)
         {
-            return;
+            NativeMethods.PostMessage(_hotkeyWindow.Handle, ToggleHotkeyMessage, IntPtr.Zero, IntPtr.Zero);
         }
-
-        var isKeyDown = message is NativeMethods.WM_KEYDOWN or NativeMethods.WM_SYSKEYDOWN;
-        if (!isKeyDown || !IsHotkeyPrimaryKeyEvent(keyboardData, _toggleHotkey) || !AreRequiredModifiersPressed(_toggleHotkey.Modifiers))
-        {
-            return;
-        }
-
-        TryPostToggleHotkeyMessage(keyboardData.scanCode);
     }
 
     private void ProcessHorizontalLockToggleHotkeyMessage(uint message, NativeMethods.KBDLLHOOKSTRUCT keyboardData)
     {
-        if (!_horizontalLockToggleHotkeyHandledByHook)
+        if (_horizontalLockToggleEisuTracker?.ProcessKeyMessage(message, keyboardData,
+                AreRequiredModifiersPressed(_horizontalLockToggleHotkey.Modifiers)) == true)
         {
-            return;
+            NativeMethods.PostMessage(_hotkeyWindow.Handle, HorizontalLockToggleHotkeyMessage, IntPtr.Zero, IntPtr.Zero);
         }
-
-        var isKeyDown = message is NativeMethods.WM_KEYDOWN or NativeMethods.WM_SYSKEYDOWN;
-        if (!isKeyDown
-            || !IsHotkeyPrimaryKeyEvent(keyboardData, _horizontalLockToggleHotkey)
-            || !AreRequiredModifiersPressed(_horizontalLockToggleHotkey.Modifiers))
-        {
-            return;
-        }
-
-        TryPostHorizontalLockToggleHotkeyMessage(keyboardData.scanCode);
     }
 
     private void ProcessEmergencyUnlockMessage(uint message, NativeMethods.KBDLLHOOKSTRUCT keyboardData)
@@ -404,47 +396,21 @@ internal sealed class InputManager : IDisposable
         }
     }
 
-    private static bool IsHotkeyPrimaryKeyEvent(NativeMethods.KBDLLHOOKSTRUCT keyboardData, HotkeyBinding hotkeyBinding)
-    {
-        return keyboardData.vkCode == hotkeyBinding.VirtualKey
-            || (hotkeyBinding.VirtualKey == NativeMethods.VK_DBE_ALPHANUMERIC
-                && keyboardData.vkCode == NativeMethods.VK_PROCESSKEY);
-    }
-
     private void ProcessToggleHotkeyRawInput(RawKeyboardEventArgs e)
     {
-        if (!_toggleHotkeyHandledByHook
-            || (e.Flags & NativeMethods.RI_KEY_BREAK) == NativeMethods.RI_KEY_BREAK
-            || !AreRequiredModifiersPressed(_toggleHotkey.Modifiers))
+        if (_toggleEisuTracker?.ProcessRawKeyboard(e, AreRequiredModifiersPressed(_toggleHotkey.Modifiers)) == true)
         {
-            return;
+            NativeMethods.PostMessage(_hotkeyWindow.Handle, ToggleHotkeyMessage, IntPtr.Zero, IntPtr.Zero);
         }
-
-        if (e.VirtualKey != _toggleHotkey.VirtualKey
-            && !(_toggleHotkey.VirtualKey == NativeMethods.VK_DBE_ALPHANUMERIC && e.VirtualKey == NativeMethods.VK_PROCESSKEY))
-        {
-            return;
-        }
-
-        TryPostToggleHotkeyMessage(e.MakeCode);
     }
 
     private void ProcessHorizontalLockToggleHotkeyRawInput(RawKeyboardEventArgs e)
     {
-        if (!_horizontalLockToggleHotkeyHandledByHook
-            || (e.Flags & NativeMethods.RI_KEY_BREAK) == NativeMethods.RI_KEY_BREAK
-            || !AreRequiredModifiersPressed(_horizontalLockToggleHotkey.Modifiers))
+        if (_horizontalLockToggleEisuTracker?.ProcessRawKeyboard(e,
+                AreRequiredModifiersPressed(_horizontalLockToggleHotkey.Modifiers)) == true)
         {
-            return;
+            NativeMethods.PostMessage(_hotkeyWindow.Handle, HorizontalLockToggleHotkeyMessage, IntPtr.Zero, IntPtr.Zero);
         }
-
-        if (e.VirtualKey != _horizontalLockToggleHotkey.VirtualKey
-            && !(_horizontalLockToggleHotkey.VirtualKey == NativeMethods.VK_DBE_ALPHANUMERIC && e.VirtualKey == NativeMethods.VK_PROCESSKEY))
-        {
-            return;
-        }
-
-        TryPostHorizontalLockToggleHotkeyMessage(e.MakeCode);
     }
 
     private static bool AreRequiredModifiersPressed(uint modifiers)
@@ -476,7 +442,9 @@ internal sealed class InputManager : IDisposable
     private bool IsAnyHoldTrackerPressed()
     {
         return (_primaryHoldTracker?.IsPressed ?? false)
-            || (_lockHoldTracker?.IsPressed ?? false);
+            || (_lockHoldTracker?.IsPressed ?? false)
+            || (_toggleEisuTracker?.IsPressed ?? false)
+            || (_horizontalLockToggleEisuTracker?.IsPressed ?? false);
     }
 
     private void EnsureHoldTimerRunningIfNeeded()
@@ -485,37 +453,6 @@ internal sealed class InputManager : IDisposable
         {
             _holdStateTimer.Start();
         }
-    }
-
-    private void TryPostToggleHotkeyMessage(uint scanCode)
-    {
-        var now = Environment.TickCount64;
-        var sameScanCode = _lastToggleHotkeyScanCode != 0 && scanCode == _lastToggleHotkeyScanCode;
-        var withinDebounce = sameScanCode && now - _lastToggleHotkeyTick < ToggleHotkeyDebounceMs;
-        if (withinDebounce)
-        {
-            return;
-        }
-
-        _lastToggleHotkeyScanCode = scanCode;
-        _lastToggleHotkeyTick = now;
-        NativeMethods.PostMessage(_hotkeyWindow.Handle, ToggleHotkeyMessage, IntPtr.Zero, IntPtr.Zero);
-    }
-
-    private void TryPostHorizontalLockToggleHotkeyMessage(uint scanCode)
-    {
-        var now = Environment.TickCount64;
-        var sameScanCode = _lastHorizontalLockToggleHotkeyScanCode != 0
-            && scanCode == _lastHorizontalLockToggleHotkeyScanCode;
-        var withinDebounce = sameScanCode && now - _lastHorizontalLockToggleHotkeyTick < ToggleHotkeyDebounceMs;
-        if (withinDebounce)
-        {
-            return;
-        }
-
-        _lastHorizontalLockToggleHotkeyScanCode = scanCode;
-        _lastHorizontalLockToggleHotkeyTick = now;
-        NativeMethods.PostMessage(_hotkeyWindow.Handle, HorizontalLockToggleHotkeyMessage, IntPtr.Zero, IntPtr.Zero);
     }
 
     private void PostStateMessage(int message, bool isPressed)

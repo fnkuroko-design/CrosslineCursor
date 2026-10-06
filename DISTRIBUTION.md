@@ -50,16 +50,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Distributions.ps1 -Pr
 ## バージョン管理
 
 - 正式なバージョン番号の唯一の管理元は `CrosshairOverlayTool.csproj` の `<Version>` である。この値からアセンブリ、ファイル、表示用のバージョン情報を生成する。
-- 現在のリリースは `v1.0.1`。アプリのトレイメニューと設定画面に表示する。
+- 現在の正式リリースは `v1.0.2`（英数ホールド中のちらつき・拘束の誤解除対策）。アプリのトレイメニューと設定画面に表示する。確認版 `v1.0.2-dev.1` に対するユーザーの動作確認と正式化の依頼を受け、機能変更なしで正式版へ移行した。
+- 開発版は `MAJOR.MINOR.PATCH-dev.N` で正式版と区別し、問題が発生する実機での確認前に正式リリースのタグを付けない。
 - リリース前に `<Version>` を `MAJOR.MINOR.PATCH` 形式で更新する。破壊的変更は `MAJOR`、機能追加は `MINOR`、互換性を保つ修正は `PATCH` を上げる。
 - リリース内容をコミットした後、同じ番号の注釈付き Git タグ（例: `v1.0.0`）を付与する。
 - 配布スクリプトはこの値を読み取り、`v<Version>` を含む出力フォルダと ZIP を作成する。
 
 ## 出力先
 
-- `dist\CrosshairOverlayTool-v1.0.1-win-x64-fdd`
-- `dist\CrosshairOverlayTool-v1.0.1-win-x64-fdd.zip`
+- `dist\CrosshairOverlayTool-v1.0.2-win-x64-fdd`
+- `dist\CrosshairOverlayTool-v1.0.2-win-x64-fdd.zip`
+- 以前の正式版と確認版 `v1.0.2-dev.1` は上書きせず保持する。
 - 明示指定した場合は `scd` または `singlefile` の同名バリエーション
+
+更新版を使う際は、現在起動しているクロスラインカーソルを終了し、正式版フォルダの EXE を起動する。EXE 単体ではなく DLL 等を含むフォルダ一式を使用する。設定ファイルとスタートアップ登録名は既存版と共有する。配布物作成では設定やスタートアップ登録を変更せず、稼働中のアプリの置換・終了も行わない。
 
 ## 追加で効く対策
 

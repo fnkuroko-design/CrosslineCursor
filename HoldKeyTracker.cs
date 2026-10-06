@@ -3,30 +3,49 @@ namespace CrosshairOverlayTool;
 internal sealed class HoldKeyTracker
 {
     private const int EisuPseudoHoldDuplicateWindowMs = 20;
-    private const int EisuPseudoHoldAdaptiveThresholdMs = 120;
     private const int EisuPseudoHoldReleaseMarginMs = 55;
     private const int EisuPseudoHoldMinLeaseMs = 110;
+    private const int EisuPseudoHoldMaxRepeatLeaseMs = 1000;
 
     private readonly HoldKeyBinding _binding;
     private readonly bool _usePseudoHoldForEisu;
     private readonly int _pseudoHoldSystemInitialLeaseMs;
+    private readonly int _pseudoHoldSystemRepeatLeaseMs;
     private readonly Action<bool> _stateChangedCallback;
+    private readonly Func<long> _getTickCount;
 
     private bool _pressed;
     private uint _activeScanCode;
     private uint _activeIdentity;
     private int _holdReleaseMissCount;
     private long _pseudoHoldExpiresAtTick;
-    private long _lastPseudoHoldKeepAliveTick;
     private int _pseudoHoldLeaseMs;
+    private RepeatObservation _hookRepeat;
+    private RepeatObservation _rawRepeat;
 
     public HoldKeyTracker(HoldKeyBinding binding, int eisuPseudoHoldInitialMarginMs, Action<bool> stateChangedCallback)
+        : this(binding, eisuPseudoHoldInitialMarginMs, stateChangedCallback,
+            () => Environment.TickCount64,
+            System.Windows.Forms.SystemInformation.KeyboardDelay,
+            System.Windows.Forms.SystemInformation.KeyboardSpeed)
+    {
+    }
+
+    internal HoldKeyTracker(HoldKeyBinding binding, int eisuPseudoHoldInitialMarginMs,
+        Action<bool> stateChangedCallback, Func<long> getTickCount, int keyboardDelay, int keyboardSpeed)
     {
         _binding = binding;
         _usePseudoHoldForEisu = _binding.VirtualKey == NativeMethods.VK_DBE_ALPHANUMERIC;
-        _pseudoHoldSystemInitialLeaseMs = GetInitialPseudoHoldLeaseMs(eisuPseudoHoldInitialMarginMs);
+        // KeyboardSpeed ranges from about 2.5 to 30 repeats/sec; hardware can differ by 20%.
+        var repeatsPerSecond = 2.5 + (Math.Clamp(keyboardSpeed, 0, 31) * 27.5 / 31);
+        _pseudoHoldSystemRepeatLeaseMs = Math.Max(EisuPseudoHoldMinLeaseMs,
+            (int)Math.Ceiling(1000 / repeatsPerSecond * 1.25) + EisuPseudoHoldReleaseMarginMs);
+        _pseudoHoldSystemInitialLeaseMs = Math.Max(_pseudoHoldSystemRepeatLeaseMs,
+            250 + Math.Clamp(keyboardDelay, 0, 3) * 250
+            + Math.Clamp(eisuPseudoHoldInitialMarginMs, 0, 60) + EisuPseudoHoldReleaseMarginMs);
         _pseudoHoldLeaseMs = _pseudoHoldSystemInitialLeaseMs;
         _stateChangedCallback = stateChangedCallback;
+        _getTickCount = getTickCount;
     }
 
     public bool IsPressed => _pressed;
@@ -35,18 +54,14 @@ internal sealed class HoldKeyTracker
 
     public void ProcessRawKeyboard(RawKeyboardEventArgs e)
     {
-        if (_usePseudoHoldForEisu
-            && (e.Flags & NativeMethods.RI_KEY_BREAK) != NativeMethods.RI_KEY_BREAK
-            && e.VirtualKey == _binding.VirtualKey)
+        if (_usePseudoHoldForEisu)
         {
-            RegisterPseudoHoldKeepAlive();
-            if (!_pressed)
+            // Eisu may emit down/up pairs for each repeat. Neither input path's up
+            // is a reliable physical release; only the keep-alive deadline releases it.
+            if ((e.Flags & NativeMethods.RI_KEY_BREAK) == 0
+                && MatchesPseudoHoldEvent(e.VirtualKey, e.KeyIdentity))
             {
-                SetPressed(true, e.MakeCode, e.KeyIdentity);
-            }
-            else
-            {
-                ExtendPseudoHoldLease();
+                ProcessPseudoHoldDown(e.MakeCode, e.KeyIdentity, ref _rawRepeat);
             }
 
             return;
@@ -71,16 +86,12 @@ internal sealed class HoldKeyTracker
         var isKeyDown = !isKeyUp
             && (message is NativeMethods.WM_KEYDOWN or NativeMethods.WM_SYSKEYDOWN);
 
-        if (_usePseudoHoldForEisu && isKeyDown && keyboardData.vkCode == _binding.VirtualKey)
+        if (_usePseudoHoldForEisu)
         {
-            RegisterPseudoHoldKeepAlive();
-            if (!_pressed)
+            var identity = CreateHookKeyIdentity(keyboardData);
+            if (isKeyDown && MatchesPseudoHoldEvent(keyboardData.vkCode, identity))
             {
-                SetPressed(true, keyboardData.scanCode, CreateHookKeyIdentity(keyboardData));
-            }
-            else
-            {
-                ExtendPseudoHoldLease();
+                ProcessPseudoHoldDown(keyboardData.scanCode, identity, ref _hookRepeat);
             }
 
             return;
@@ -96,7 +107,7 @@ internal sealed class HoldKeyTracker
             return;
         }
 
-        if (isKeyUp && MatchesReleaseEvent(keyboardData, _binding.VirtualKey, _activeScanCode))
+        if (isKeyUp && keyboardData.vkCode == _binding.VirtualKey)
         {
             SetPressed(false, 0, 0);
         }
@@ -111,7 +122,7 @@ internal sealed class HoldKeyTracker
 
         if (_usePseudoHoldForEisu)
         {
-            if (Environment.TickCount64 >= _pseudoHoldExpiresAtTick)
+            if (_getTickCount() >= _pseudoHoldExpiresAtTick)
             {
                 SetPressed(false, 0, 0);
             }
@@ -173,7 +184,8 @@ internal sealed class HoldKeyTracker
         {
             if (_usePseudoHoldForEisu)
             {
-                _lastPseudoHoldKeepAliveTick = 0;
+                _hookRepeat = default;
+                _rawRepeat = default;
                 _pseudoHoldLeaseMs = _pseudoHoldSystemInitialLeaseMs;
                 ExtendPseudoHoldLease();
             }
@@ -181,7 +193,8 @@ internal sealed class HoldKeyTracker
         else
         {
             _pseudoHoldExpiresAtTick = 0;
-            _lastPseudoHoldKeepAliveTick = 0;
+            _hookRepeat = default;
+            _rawRepeat = default;
             _pseudoHoldLeaseMs = _pseudoHoldSystemInitialLeaseMs;
         }
 
@@ -190,33 +203,64 @@ internal sealed class HoldKeyTracker
 
     private void ExtendPseudoHoldLease()
     {
-        _pseudoHoldExpiresAtTick = Environment.TickCount64 + _pseudoHoldLeaseMs;
+        // A delayed duplicate or a new interval estimate must never shorten a lease.
+        _pseudoHoldExpiresAtTick = Math.Max(_pseudoHoldExpiresAtTick, _getTickCount() + _pseudoHoldLeaseMs);
     }
 
-    private void RegisterPseudoHoldKeepAlive()
+    internal bool MatchesPseudoHoldEvent(uint virtualKey, uint identity)
     {
-        var now = Environment.TickCount64;
-        if (_lastPseudoHoldKeepAliveTick == 0)
+        return _usePseudoHoldForEisu && (virtualKey == _binding.VirtualKey
+            // Raw Input may retain CapsLock while the IME-facing hook reports Eisu.
+            // Only the physical key already identified as Eisu may renew the lease.
+            || (_pressed && (virtualKey is NativeMethods.VK_PROCESSKEY or NativeMethods.VK_CAPITAL)
+                && _activeIdentity != 0 && identity == _activeIdentity));
+    }
+
+    private void ProcessPseudoHoldDown(uint scanCode, uint identity, ref RepeatObservation observation)
+    {
+        if (!_pressed)
         {
-            _lastPseudoHoldKeepAliveTick = now;
-            return;
+            SetPressed(true, scanCode, identity);
+        }
+        else if (_activeIdentity == 0 && identity != 0)
+        {
+            _activeScanCode = scanCode;
+            _activeIdentity = identity;
         }
 
-        var observedInterval = now - _lastPseudoHoldKeepAliveTick;
-        if (observedInterval <= EisuPseudoHoldDuplicateWindowMs)
+        var now = _getTickCount();
+        if (observation.LastTick is long lastTick)
         {
-            return;
+            var interval = now - lastTick;
+            if (interval <= EisuPseudoHoldDuplicateWindowMs)
+            {
+                return;
+            }
+
+            // The first interval includes the initial typematic delay, not repeat speed.
+            // Measure hook and Raw Input separately so their duplicate reports cannot
+            // be mistaken for faster keyboard repeats.
+            if (observation.HasRepeated)
+            {
+                observation.MaxRepeatIntervalMs = Math.Max(observation.MaxRepeatIntervalMs,
+                    (int)Math.Min(interval, EisuPseudoHoldMaxRepeatLeaseMs - EisuPseudoHoldReleaseMarginMs));
+            }
+
+            observation.HasRepeated = true;
+            _pseudoHoldLeaseMs = Math.Max(_pseudoHoldSystemRepeatLeaseMs,
+                Math.Max(_hookRepeat.MaxRepeatIntervalMs, _rawRepeat.MaxRepeatIntervalMs)
+                + EisuPseudoHoldReleaseMarginMs);
         }
 
-        if (observedInterval <= EisuPseudoHoldAdaptiveThresholdMs)
-        {
-            _pseudoHoldLeaseMs = (int)Math.Clamp(
-                observedInterval + EisuPseudoHoldReleaseMarginMs,
-                EisuPseudoHoldMinLeaseMs,
-                _pseudoHoldSystemInitialLeaseMs);
-        }
+        observation.LastTick = now;
+        ExtendPseudoHoldLease();
+    }
 
-        _lastPseudoHoldKeepAliveTick = now;
+    private struct RepeatObservation
+    {
+        public long? LastTick;
+        public bool HasRepeated;
+        public int MaxRepeatIntervalMs;
     }
 
     private bool IsCurrentlyDown()
@@ -232,19 +276,6 @@ internal sealed class HoldKeyTracker
             NativeMethods.VK_DBE_ALPHANUMERIC => IsAnyKeyPressed(NativeMethods.VK_DBE_ALPHANUMERIC),
             _ => IsAnyKeyPressed(_binding.VirtualKey)
         };
-    }
-
-    private static bool MatchesReleaseEvent(
-        NativeMethods.KBDLLHOOKSTRUCT keyboardData,
-        uint configuredVirtualKey,
-        uint activeScanCode)
-    {
-        if (configuredVirtualKey == NativeMethods.VK_DBE_ALPHANUMERIC)
-        {
-            return activeScanCode != 0 && keyboardData.scanCode == activeScanCode;
-        }
-
-        return keyboardData.vkCode == configuredVirtualKey;
     }
 
     private static bool IsKeyUpEvent(uint message, NativeMethods.KBDLLHOOKSTRUCT keyboardData)
@@ -266,13 +297,7 @@ internal sealed class HoldKeyTracker
         return false;
     }
 
-    private static int GetInitialPseudoHoldLeaseMs(int eisuPseudoHoldInitialMarginMs)
-    {
-        var keyboardDelay = System.Windows.Forms.SystemInformation.KeyboardDelay;
-        return 250 + (keyboardDelay * 250) + eisuPseudoHoldInitialMarginMs;
-    }
-
-    private static uint CreateHookKeyIdentity(NativeMethods.KBDLLHOOKSTRUCT keyboardData)
+    internal static uint CreateHookKeyIdentity(NativeMethods.KBDLLHOOKSTRUCT keyboardData)
     {
         var identity = keyboardData.scanCode & 0xFFFF;
         if ((keyboardData.flags & NativeMethods.LLKHF_EXTENDED) == NativeMethods.LLKHF_EXTENDED)

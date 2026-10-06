@@ -10,7 +10,7 @@
     <AssemblyName>CrosshairOverlayTool</AssemblyName>
     <RootNamespace>CrosshairOverlayTool</RootNamespace>
     <Title>Crosshair Overlay Tool</Title>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Authors>Fumiya</Authors>
     <Company>Fumiya</Company>
     <Product>Crosshair Overlay Tool</Product>
@@ -22,5 +22,6 @@
   <ItemGroup>
     <Compile Remove="snapshots\**\*.cs" />
     <Compile Remove="temp\**\*.cs" />
+    <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
 </Project>
