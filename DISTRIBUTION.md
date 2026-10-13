@@ -1,84 +1,58 @@
-# 配布形態メモ
+# 配布方針
 
-Norton などの AV 製品は、未署名の新規アプリに対してレピュテーションとヒューリスティックを強く使います。  
-このアプリは次の要素を持つため、誤検知されやすい側です。
+公式成果物は **FDD（Framework-Dependent Deployment）の Windows x64 版のみ**とします。.NET ランタイム、ランタイムのインストーラー、自動インストール機能を同梱しません。SCD・single-file は生成・公開しません。
 
-- グローバルキーフック
-- Raw Input
-- 最前面の透明クリック透過オーバーレイ
-- スタートアップ登録機能
+## 必要環境
 
-さらに、`.NET` の単一ファイル配布は、設定によってはネイティブ部品を実行時に展開します。  
-そのため、検知を減らしたい場合は単一ファイルを既定にしない方が安全です。
+**Microsoft .NET Desktop Runtime 8 の x64 版（最新の 8.0.x）の外部インストールが必須**です。通常の .NET Runtime のみでは不足します。SDK は実行には不要です。
 
-## 標準の配布形式
-
-`fdd`（Framework-Dependent Deployment）を標準の配布形式とする。配布先には `.NET Desktop Runtime 8` が必要だが、ライブラリを同梱せず配布サイズを小さくでき、未署名アプリでの AV 誤検知を抑えやすい。
-
-`scd` と `single-file` は必要になった場合にだけ明示指定して生成する。
-
-## 形式の比較
-
-1. `fdd`
-   - `Framework-Dependent Deployment`
-   - 検知を減らしたい場合の第一候補
-   - 配布サイズが小さい
-   - 配布先に `.NET Desktop Runtime 8` が必要
-2. `scd`
-   - `Self-Contained Deployment`
-   - ランタイム不要
-   - 単一ファイルではなく複数ファイルで配る
-   - `single-file` よりは検知面で有利になりやすい
-3. `single-file`
-   - 利便性は高い
-   - 自己展開を伴うため検知を受けやすい
-   - AV 誤検知が問題になる配布では非推奨
+[Microsoft 公式ダウンロード](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) の「.NET Desktop Runtime」を案内します。
 
 ## 配布コマンド
+
+Windows と .NET SDK 8 以降で実行します。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Distributions.ps1
 ```
 
-既定では `fdd` だけを生成します。
-別形式も作る場合は、プロファイルを明示します。
+互換性のため `-Profiles fdd` も受け付けますが、その他の形式は拒否します。同名の出力が既にある場合は上書きせず停止します。
+
+処理内容:
+
+1. `--self-contained false`、`PublishSingleFile=false` で発行し、ランタイムを含まないことを確認。
+2. アプリの `LICENSE`、`README.md`、`THIRD-PARTY-NOTICES.md` を同梱。
+3. MSBuild の `ResolvedAppHostPack` から実際の apphost を特定し、そのライセンス・第三者通知・出典情報を `licenses` に同梱。取得できない場合は停止。
+4. ZIP と SHA-256 チェックサムを生成。
+
+出力例:
+
+- `dist\CrosshairOverlayTool-v1.0.3-win-x64-fdd\`
+- `dist\CrosshairOverlayTool-v1.0.3-win-x64-fdd.zip`
+- `dist\CrosshairOverlayTool-v1.0.3-win-x64-fdd.zip.sha256`
+
+EXE 単体では配布せず、DLL とライセンスを含む ZIP 一式を使用します。過去にローカルで作成した SCD 等は Git 管理外のまま保持し、公開しません。
+
+## バージョンと GitHub Release
+
+- バージョンの管理元は `CrosshairOverlayTool.csproj` の `<Version>` です。
+- `v1.0.3` は Public 公開とライセンス・FDD 限定配布の整備版です。`v1.0.2` からアプリ機能は変更していません。
+- 既存の成果物は保持し、新しい版として作成します。
+- 公開コミットを確定後にビルドし、製品バージョン内のコミット ID と一致することを確認します。検証後、同じコミットに注釈付きタグを付けます。
+- GitHub Release には FDD ZIP とその SHA-256 のみを添付します。GitHub が自動生成するソースアーカイブはアプリの実行用成果物ではありません。
+- 開発版は `MAJOR.MINOR.PATCH-dev.N` で正式版と区別します。
+
+## 更新と検証
+
+起動中の旧版を終了してから、新しいフォルダの EXE を起動します。設定とスタートアップ登録名は版をまたいで共有します。配布物生成だけではユーザー設定やスタートアップ登録を変更しません。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Distributions.ps1 -Profiles fdd,scd,single-file
+dotnet run --project .\tests\InputRegression\InputRegression.csproj -c Release
+Get-FileHash .\dist\CrosshairOverlayTool-v1.0.3-win-x64-fdd.zip -Algorithm SHA256
 ```
 
-## バージョン管理
+回帰テスト、ビルド、バージョン・FDD 内容・ライセンス同梱・ZIP の整合性を確認します。実機での入力や表示の確認とは区別します。
 
-- 正式なバージョン番号の唯一の管理元は `CrosshairOverlayTool.csproj` の `<Version>` である。この値からアセンブリ、ファイル、表示用のバージョン情報を生成する。
-- 現在の正式リリースは `v1.0.2`（英数ホールド中のちらつき・拘束の誤解除対策）。アプリのトレイメニューと設定画面に表示する。確認版 `v1.0.2-dev.1` に対するユーザーの動作確認と正式化の依頼を受け、機能変更なしで正式版へ移行した。
-- 開発版は `MAJOR.MINOR.PATCH-dev.N` で正式版と区別し、問題が発生する実機での確認前に正式リリースのタグを付けない。
-- リリース前に `<Version>` を `MAJOR.MINOR.PATCH` 形式で更新する。破壊的変更は `MAJOR`、機能追加は `MINOR`、互換性を保つ修正は `PATCH` を上げる。
-- リリース内容をコミットした後、同じ番号の注釈付き Git タグ（例: `v1.0.0`）を付与する。
-- 配布スクリプトはこの値を読み取り、`v<Version>` を含む出力フォルダと ZIP を作成する。
+アプリは [MIT License](LICENSE) です。第三者の条件は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) と ZIP 内の `licenses` を参照してください。
 
-## 出力先
-
-- `dist\CrosshairOverlayTool-v1.0.2-win-x64-fdd`
-- `dist\CrosshairOverlayTool-v1.0.2-win-x64-fdd.zip`
-- 以前の正式版と確認版 `v1.0.2-dev.1` は上書きせず保持する。
-- 明示指定した場合は `scd` または `singlefile` の同名バリエーション
-
-更新版を使う際は、現在起動しているクロスラインカーソルを終了し、正式版フォルダの EXE を起動する。EXE 単体ではなく DLL 等を含むフォルダ一式を使用する。設定ファイルとスタートアップ登録名は既存版と共有する。配布物作成では設定やスタートアップ登録を変更せず、稼働中のアプリの置換・終了も行わない。
-
-## 追加で効く対策
-
-- Authenticode でコード署名する
-- Norton / Symantec に誤検知申請する
-- バージョン情報、製品名、会社名を PE に埋める
-- まずは `fdd` 版で社内・知人配布し、問題がなければ `scd` に広げる
-
-## 参考
-
-- .NET single-file deployment  
-  https://learn.microsoft.com/dotnet/core/deploying/single-file/overview
-- .NET publishing overview  
-  https://learn.microsoft.com/dotnet/core/deploying/
-- Broadcom: Signed .NET apps may still need whitelist / false positive review  
-  https://knowledge.broadcom.com/external/article/169441/signed-net-application-is-detected-as-fa.html
-- Broadcom: Submit a false positive sample  
-  https://knowledge.broadcom.com/external/article/178170/submit-false-positives-detected-by-endpo.html
+未署名で、グローバル入力監視・最前面表示を利用するため、セキュリティ製品に警告される可能性があります。FDD にしても誤検知がなくなる保証はありません。
