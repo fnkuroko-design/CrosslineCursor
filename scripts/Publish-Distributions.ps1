@@ -53,8 +53,10 @@ if (Compare-Object $expectedFiles $actualFiles) { throw "Unexpected FDD output. 
 $runtime = Get-Content -LiteralPath (Join-Path $outputDirectory "CrosshairOverlayTool.runtimeconfig.json") -Raw | ConvertFrom-Json
 $frameworkNames = @($runtime.runtimeOptions.frameworks | ForEach-Object { $_.name })
 if ($null -ne $runtime.runtimeOptions.includedFrameworks -or
-    (Compare-Object @("Microsoft.NETCore.App", "Microsoft.WindowsDesktop.App") $frameworkNames)) {
-    throw "Output must require the external Desktop Runtime. No ZIP was produced."
+    (Compare-Object @("Microsoft.NETCore.App", "Microsoft.WindowsDesktop.App") $frameworkNames) -or
+    $runtime.runtimeOptions.tfm -ne "net10.0" -or
+    @($runtime.runtimeOptions.frameworks | Where-Object { $_.version -notmatch '^10\.0\.\d+$' }).Count -ne 0) {
+    throw "Output must require the external .NET Desktop Runtime 10. No ZIP was produced."
 }
 
 # Resolve the exact apphost package used by this SDK rather than assuming a cache version.
@@ -66,9 +68,58 @@ $resolved = ($resolvedJson -join [Environment]::NewLine) | ConvertFrom-Json
 $packs = @($resolved.Items.ResolvedAppHostPack | Where-Object { $_.RuntimeIdentifier -eq $RuntimeIdentifier })
 if ($packs.Count -ne 1) { throw "Expected exactly one resolved apphost package." }
 $pack = $packs[0]
+# SDK-bundled packs omit NuGet metadata, but their resolved directory identifies
+# the exact package and version. The official binary is verified below.
+$hostPackageId = if ($pack.NuGetPackageId) { $pack.NuGetPackageId } else {
+    Split-Path -Leaf (Split-Path -Parent $pack.PackageDirectory)
+}
+$hostPackageVersion = if ($pack.NuGetPackageVersion) { $pack.NuGetPackageVersion } else {
+    Split-Path -Leaf $pack.PackageDirectory
+}
+if ($hostPackageId -ne "Microsoft.NETCore.App.Host.win-x64" -or $hostPackageVersion -notmatch '^10\.0\.\d+$') {
+    throw "Expected the stable .NET 10 win-x64 apphost package."
+}
 $licenseSource = Join-Path $pack.PackageDirectory "LICENSE.TXT"
 $noticesSource = Join-Path $pack.PackageDirectory "THIRD-PARTY-NOTICES.TXT"
-$nuspecPath = Join-Path $pack.PackageDirectory "$($pack.NuGetPackageId.ToLowerInvariant()).nuspec"
+$nuspecPath = Join-Path $pack.PackageDirectory "$($hostPackageId.ToLowerInvariant()).nuspec"
+
+# SDK-bundled host packs may omit attribution files. Obtain the same official NuGet
+# package and verify that its apphost is byte-identical to the host used by MSBuild.
+if (-not (Test-Path -LiteralPath $licenseSource) -or
+    -not (Test-Path -LiteralPath $noticesSource) -or
+    -not (Test-Path -LiteralPath $nuspecPath)) {
+    $packageId = $hostPackageId.ToLowerInvariant()
+    $packageVersion = $hostPackageVersion
+    $attributionDirectory = Join-Path $repoRoot "temp\apphost-attribution\$packageId\$packageVersion"
+    New-Item -ItemType Directory -Force -Path $attributionDirectory | Out-Null
+    $packageArchivePath = Join-Path $attributionDirectory "$packageId.$packageVersion.nupkg"
+    $packageUri = "https://api.nuget.org/v3-flatcontainer/$packageId/$packageVersion/$packageId.$packageVersion.nupkg"
+    Invoke-WebRequest -Uri $packageUri -OutFile $packageArchivePath -UseBasicParsing
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $packageArchive = [System.IO.Compression.ZipFile]::OpenRead($packageArchivePath)
+    try {
+        $entriesToExtract = [ordered]@{
+            "LICENSE.TXT" = "LICENSE.TXT"
+            "THIRD-PARTY-NOTICES.TXT" = "THIRD-PARTY-NOTICES.TXT"
+            "$packageId.nuspec" = "$packageId.nuspec"
+            "runtimes/win-x64/native/apphost.exe" = "apphost.exe"
+        }
+        foreach ($entryName in $entriesToExtract.Keys) {
+            $entry = $packageArchive.GetEntry($entryName)
+            if ($null -eq $entry) { throw "Official apphost package is missing $entryName" }
+            $destination = Join-Path $attributionDirectory $entriesToExtract[$entryName]
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destination, $true)
+        }
+    } finally { $packageArchive.Dispose() }
+    $officialHostHash = (Get-FileHash -LiteralPath (Join-Path $attributionDirectory "apphost.exe") -Algorithm SHA256).Hash
+    $resolvedHostHash = (Get-FileHash -LiteralPath $pack.Path -Algorithm SHA256).Hash
+    if ($officialHostHash -ne $resolvedHostHash) {
+        throw "Official package apphost differs from the resolved SDK host; attribution cannot be verified."
+    }
+    $licenseSource = Join-Path $attributionDirectory "LICENSE.TXT"
+    $noticesSource = Join-Path $attributionDirectory "THIRD-PARTY-NOTICES.TXT"
+    $nuspecPath = Join-Path $attributionDirectory "$packageId.nuspec"
+}
 foreach ($sourceFile in @($licenseSource, $noticesSource, $nuspecPath)) {
     if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
         throw "Missing apphost attribution source: $sourceFile"
@@ -87,9 +138,9 @@ New-Item -ItemType Directory -Path $licensesDirectory | Out-Null
 Copy-Item -LiteralPath $licenseSource -Destination (Join-Path $licensesDirectory "dotnet-apphost-LICENSE.txt")
 Copy-Item -LiteralPath $noticesSource -Destination (Join-Path $licensesDirectory "dotnet-apphost-THIRD-PARTY-NOTICES.txt")
 [ordered]@{
-    packageId = $pack.NuGetPackageId
-    packageVersion = $pack.NuGetPackageVersion
-    packageUrl = "https://www.nuget.org/packages/$($pack.NuGetPackageId)/$($pack.NuGetPackageVersion)"
+    packageId = $hostPackageId
+    packageVersion = $hostPackageVersion
+    packageUrl = "https://www.nuget.org/packages/$hostPackageId/$hostPackageVersion"
     repositoryUrl = [string]$nuspec.package.metadata.repository.url
     repositoryCommit = [string]$nuspec.package.metadata.repository.commit
     license = "MIT"
@@ -100,5 +151,5 @@ Copy-Item -LiteralPath $noticesSource -Destination (Join-Path $licensesDirectory
 Compress-Archive -LiteralPath @(Get-ChildItem -LiteralPath $outputDirectory | ForEach-Object FullName) -DestinationPath $zipPath -CompressionLevel Optimal
 $zipHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 "$zipHash  $artifactName.zip" | Set-Content -LiteralPath $checksumPath -Encoding ASCII
-Write-Output "Release: v$releaseVersion (FDD only; external .NET Desktop Runtime 8 x64 required)"
+Write-Output "Release: v$releaseVersion (FDD only; external .NET Desktop Runtime 10 x64 required)"
 Get-Item -LiteralPath $outputDirectory, $zipPath, $checksumPath | Select-Object Name, Length

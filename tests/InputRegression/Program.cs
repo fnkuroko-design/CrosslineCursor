@@ -62,6 +62,45 @@ Test("Ordinary modifier keys still release immediately", () =>
 });
 
 #if !BASELINE
+Test("Existing settings JSON round-trips on the migrated runtime", () =>
+{
+    const string legacyJson = """
+        {
+          "enable_hold_mode": true,
+          "enable_toggle_mode": true,
+          "hold_key": "英数",
+          "toggle_hotkey": "Ctrl+英数",
+          "horizontal_lock_toggle_hotkey": "Alt+英数",
+          "line_thickness": 5,
+          "opacity": 94,
+          "line_color": "#00FF00",
+          "run_on_startup": true,
+          "eisu_pseudo_hold_initial_margin_ms": 60,
+          "enable_horizontal_lock": true,
+          "horizontal_lock_trigger_mode": "same_hold_key",
+          "horizontal_lock_hold_key": "英数"
+        }
+        """;
+    var options = new System.Text.Json.JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+    var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(legacyJson, options);
+    Assert(settings is not null, "existing settings were not deserialized");
+    using var original = System.Text.Json.JsonDocument.Parse(legacyJson);
+    using var roundTrip = System.Text.Json.JsonDocument.Parse(
+        System.Text.Json.JsonSerializer.Serialize(settings, options));
+    Assert(roundTrip.RootElement.EnumerateObject().Count() == original.RootElement.EnumerateObject().Count(),
+        "settings property set changed");
+    foreach (var property in original.RootElement.EnumerateObject())
+    {
+        Assert(roundTrip.RootElement.TryGetProperty(property.Name, out var value)
+            && value.ToString() == property.Value.ToString(), $"settings changed: {property.Name}");
+    }
+});
+
 Fixture New(int delay = 1, int speed = 31, int margin = 0) => new(delay, speed, margin);
 void Down(Fixture f, uint vk = Eisu, uint scan = Scan, uint flags = 0)
     => f.Tracker.ProcessKeyMessage(NativeMethods.WM_KEYDOWN, Key(vk, scan, flags));

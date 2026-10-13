@@ -6,7 +6,12 @@ Windows のマウスカーソル位置に追従する、透明・クリック透
 
 公式配布は **Windows x64 用 FDD 版のみ**です。.NET ランタイムは同梱しません。自己完結版・単一ファイル版は配布しません。
 
-1. **Microsoft .NET Desktop Runtime 8 の x64 版（最新の 8.0.x）を別途インストール**してください。[Microsoft 公式ダウンロード](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) の「.NET Desktop Runtime」から取得します。
+| 配布版 | 必須の外部ランタイム | 公開方針 |
+| --- | --- | --- |
+| [v1.0.4](https://github.com/fnkuroko-design/CrosslineCursor/releases/tag/v1.0.4) 以降 | .NET Desktop Runtime 10 x64（最新の 10.0.x） | 現行版 |
+| [v1.0.3](https://github.com/fnkuroko-design/CrosslineCursor/releases/tag/v1.0.3) | .NET Desktop Runtime 8 x64（最新の 8.0.x） | 互換性用に継続公開。v1.0.4 の次回更新時に公開停止予定 |
+
+1. **Microsoft .NET Desktop Runtime 10 の x64 版（最新の 10.0.x）を別途インストール**してください。[Microsoft 公式ダウンロード](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) の「.NET Desktop Runtime」から取得します。.NET 8 のみが入っている環境では v1.0.4 以降は動作しません。
 2. [Releases](https://github.com/fnkuroko-design/CrosslineCursor/releases/latest) から `CrosshairOverlayTool-v<バージョン>-win-x64-fdd.zip` を取得します。
 3. ZIP をフォルダごと展開し、`CrosshairOverlayTool.exe` を起動します。EXE だけを移動しないでください。
 
@@ -39,7 +44,7 @@ Windows のマウスカーソル位置に追従する、透明・クリック透
 
 ## 開発と配布
 
-Windows と .NET SDK 8 以降を使用します。
+Windows と .NET SDK 10 を使用します。`global.json` により、インストール済みの安定版 10.0 系 SDK を選択します。
 
 ```powershell
 dotnet build .\CrosshairOverlayTool.csproj -c Release

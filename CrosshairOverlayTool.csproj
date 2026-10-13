@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <Nullable>enable</Nullable>
@@ -10,7 +10,7 @@
     <AssemblyName>CrosshairOverlayTool</AssemblyName>
     <RootNamespace>CrosshairOverlayTool</RootNamespace>
     <Title>Crosshair Overlay Tool</Title>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Authors>Fumiya</Authors>
     <Company>Fumiya</Company>

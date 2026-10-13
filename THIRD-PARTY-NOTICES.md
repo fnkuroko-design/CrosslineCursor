@@ -20,6 +20,6 @@ FDD 版はランタイム一式を同梱しませんが、EXE には .NET の起
 
 ## 外部インストールするランタイム
 
-.NET Desktop Runtime 8（Windows x64）は、利用者が [Microsoft の公式配布元](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) から別途取得・インストールしてください。その配布物には Microsoft が提示するライセンスが適用されます。本プロジェクトの MIT ライセンスでランタイムを再許諾するものではありません。
+.NET Desktop Runtime 10（Windows x64）は、利用者が [Microsoft の公式配布元](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) から別途取得・インストールしてください。その配布物には Microsoft が提示するライセンスが適用されます。本プロジェクトの MIT ライセンスでランタイムを再許諾するものではありません。
 
 Windows の API とインストール済みフォントを利用しますが、Windows DLL やフォントファイルを同梱しません。トレイアイコンはコードで描画します。
