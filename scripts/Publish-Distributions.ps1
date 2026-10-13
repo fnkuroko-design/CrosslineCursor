@@ -105,8 +105,9 @@ if (-not (Test-Path -LiteralPath $licenseSource) -or
             "runtimes/win-x64/native/apphost.exe" = "apphost.exe"
         }
         foreach ($entryName in $entriesToExtract.Keys) {
-            $entry = $packageArchive.GetEntry($entryName)
-            if ($null -eq $entry) { throw "Official apphost package is missing $entryName" }
+            $matches = @($packageArchive.Entries | Where-Object { $_.FullName -ieq $entryName })
+            if ($matches.Count -ne 1) { throw "Official apphost package is missing or duplicates $entryName" }
+            $entry = $matches[0]
             $destination = Join-Path $attributionDirectory $entriesToExtract[$entryName]
             [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destination, $true)
         }
